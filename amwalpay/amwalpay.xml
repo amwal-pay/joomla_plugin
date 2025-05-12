@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<extension version="2.5" type="plugin" group="vmpayment" method="upgrade">
+    <name>VM Payment - AmwalPay</name>
+    <creationDate>May 2025</creationDate>
+    <author>Amwalpay Development Team</author>
+    <authorUrl>https://www.amwal-pay.com/</authorUrl>
+    <copyright>Copyright (C) 2024 - 2025 AmwalPay Team. All rights reserved.</copyright>
+    <license>http://www.gnu.org/licenses/gpl-2.0.html GNU/GPL</license>
+    <version>1.0.0</version>
+    <description>Amwal Payment Gateway for Oman  and supports all card and wallet payment</description>
+    <files>
+        <filename plugin="amwalpay">amwalpay.php</filename>
+        <folder>amwalpay</folder>
+    </files>
+    <vmconfig>
+        <fields name="params">
+            <fieldset name="basic" addfieldpath="/plugins/vmpayment/amwalpay/amwalpay/fields">
+                  <field name="secret_key" type="select" label="Environment"
+                     description="Environment" id="live" required="true" >
+                </field>
+                <field name="live" type="radio" default="uat" label="Environment" >
+                    <option value="prod">Production</option>
+                    <option value="sit">SIT</option>
+                    <option value="uat">UAT</option>
+                </field>
+                <field name="merchant_id" type="text" label="Merchant id"
+                     description="Merchant id" id="merchant_id" required="true" >
+                </field>
+                <field name="terminal_id" type="text" label="Terminal id"
+                     description="Terminal id" id="terminal_id" required="true" >
+                </field>
+                <field name="secret_key" type="text" label="Secret key"
+                     description="Secret key" id="secret_key" required="true" >
+                </field>
+                <field name="debug" type="radio" default="0" label="Debug Log" >
+                    <option value="0">NO</option>
+                    <option value="1">YES</option>
+                </field>
+                <field type="getlogpath"/>
+            </fieldset>
+        </fields>
+    </vmconfig>
+    <updateservers>
+        <!-- Note: No spaces or linebreaks allowed between the server tags -->
+        <server type="extension" name="VirtueMart plg_vmpayment_AmwalPay Update Site"><![CDATA[http://virtuemart.net/releases/vm3/plg_update.xml]]></server></updateservers>
+
+</extension>
+
+
