@@ -49,4 +49,4 @@ Once configured, the AmwalPay payment option will be visible on your store's che
 
 ## 📞 Support
 
-If you have any questions or need help, please contact **support@amwalpay.com**.
+If you have any questions or need help, please contact **support@amwal-pay.com**.
