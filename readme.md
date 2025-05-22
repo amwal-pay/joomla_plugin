@@ -22,11 +22,12 @@ Download the AmwalPay Joomla VirtueMart plugin ZIP file from [this link](https:/
 
 ### 3. Add New Payment Method
 1. Navigate to: `Components → VirtueMart → Payment Methods`.
-<a href="https://ibb.co/YF1hqKZ1"><img src="https://i.ibb.co/kswXWr1w/3.png" alt="3" border="0"></a>
+![Step 2](https://i.ibb.co/kswXWr1w/3.png)
 2. Click on the **"New"** button. You will be redirected to the payment method information page.
 <a href="https://ibb.co/nMGLhkFQ"><img src="https://i.ibb.co/s9fVL3Zs/4.png" alt="4" border="0"></a>
 3. You will then fill in the payment method information based on which one you will integrate.
 4. Click **"Save"**.
+
 <a href="https://ibb.co/ksK1wPmW"><img src="https://i.ibb.co/DH4pvjrS/5.png" alt="5" border="0"></a>
 
 ### 4. Configure AmwalPay Settings
