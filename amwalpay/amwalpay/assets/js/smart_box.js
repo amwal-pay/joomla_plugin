@@ -6,9 +6,8 @@ document.addEventListener("DOMContentLoaded", function () {
                 document.getElementById("Error").style.display = "block";
                 return;
             }
-            var base_url = window.BaseUrl;
+            
             var callback = window.CallBack;
-            console.log(data);
             SmartBox.Checkout.configure = {
                 ...data,
 
@@ -21,10 +20,10 @@ document.addEventListener("DOMContentLoaded", function () {
 
                 },
                 cancelCallback: function () {
-                    window.location = base_url;
+                    window.location = window.CancelUrl;
                 },
             };
-
+            SmartBox.Checkout.configure.SmartBoxColorConfig = { PrimaryColor: data["PrimaryColor"] };
             SmartBox.Checkout.showSmartBox()
         }
     }

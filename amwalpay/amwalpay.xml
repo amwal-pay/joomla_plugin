@@ -3,10 +3,10 @@
     <name>VM Payment - AmwalPay</name>
     <creationDate>May 2025</creationDate>
     <author>Amwalpay Development Team</author>
-    <authorUrl>https://www.amwal-pay.com/</authorUrl>
-    <copyright>Copyright (C) 2024 - 2025 AmwalPay Team. All rights reserved.</copyright>
+    <authorUrl>https://amwalpay.om</authorUrl>
+    <copyright>Copyright (C) 2025 - 2026 AmwalPay Team. All rights reserved.</copyright>
     <license>http://www.gnu.org/licenses/gpl-2.0.html GNU/GPL</license>
-    <version>1.0.0</version>
+    <version>1.0.1</version>
     <description>Amwal Payment Gateway for Oman  and supports all card and wallet payment</description>
     <files>
         <filename plugin="amwalpay">amwalpay.php</filename>
@@ -15,7 +15,7 @@
     <vmconfig>
         <fields name="params">
             <fieldset name="basic" addfieldpath="/plugins/vmpayment/amwalpay/amwalpay/fields">
-                  <field name="secret_key" type="select" label="Environment"
+                <field name="secret_key" type="select" label="Environment"
                      description="Environment" id="live" required="true" >
                 </field>
                 <field name="live" type="radio" default="uat" label="Environment" >
@@ -32,7 +32,23 @@
                 <field name="secret_key" type="text" label="Secret key"
                      description="Secret key" id="secret_key" required="true" >
                 </field>
-                <field name="debug" type="radio" default="0" label="Debug Log" >
+                <field name="payment_view" type="radio" default="1" label="Payment Page View" >
+                    <option value="1">Onsite Pop Up</option>
+                    <option value="2">Onsite Full Page</option>
+                    <option value="3">Offsite Redirection</option>
+                </field>
+                <field name="contact_info_type" type="radio" default="1" label="Contact Info Type" >
+                    <option value="1">All</option>
+                    <option value="2">Email Only</option>
+                    <option value="3">Phone Only</option>
+                    <option value="4">None</option>
+                </field>
+                <field name="ignore_receipt" type="radio" default="0" label="Ignore Receipt" >
+                    <option value="0">NO</option>
+                    <option value="1">YES</option>
+                </field>
+                <field type="getcolor" name="checkout_color" label="Checkout Theme Color" default="#7f22ff" description="Checkout Theme Color" />
+                <field name="debug" type="radio" default="1" label="Debug Log" >
                     <option value="0">NO</option>
                     <option value="1">YES</option>
                 </field>

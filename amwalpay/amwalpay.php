@@ -3,7 +3,7 @@
  *
  * AmwalPay payment plugin
  *
- * @author $URI: https://www.amwal-pay.com/
+ * @author $URI: https://amwalpay.om/
  * @author AmwalPay Development Team
  * @version $Id: amwalpay.php
  * @package VirtueMart
@@ -27,7 +27,7 @@ if (!class_exists('AmwalPay')) {
 class plgVmPaymentAmwalPay extends vmPSPlugin
 {
 	private $_currentMethod;
-	private $_file;
+	private $file;
 	function __construct(&$subject, $config)
 	{
 		parent::__construct($subject, $config);
@@ -44,6 +44,10 @@ class plgVmPaymentAmwalPay extends vmPSPlugin
 			'merchant_id' => array('', 'char'),
 			'terminal_id' => array('', 'char'),
 			'secret_key' => array('', 'char'),
+			'payment_view' => array('', 'char'),
+			'contact_info_type' => array('', 'char'),
+			'ignore_receipt' => array('', 'char'),
+			'checkout_color' => array('', 'char'),
 			'debug' => array(0, 'int')
 		);
 		$this->addVarsToPushCore($varsToPush, 1);
@@ -57,6 +61,7 @@ class plgVmPaymentAmwalPay extends vmPSPlugin
 			'virtuemart_order_id' => 'int(1) UNSIGNED',
 			'order_number' => 'char(64)',
 		);
+		AmwalPay::createCardsTokenTable();
 		return $SQLfields;
 	}
 	/**
@@ -74,6 +79,7 @@ class plgVmPaymentAmwalPay extends vmPSPlugin
 			return FALSE;
 		}
 		$app = JFactory::getApplication();
+		$user = JFactory::getUser();
 		$order_number = $order['details']['BT']->order_number;
 		$_VMOrderID = $order['details']['BT']->virtuemart_order_id;
 		$selectedMethod = $this->getVmPluginMethod($cart->virtuemart_paymentmethod_id);
@@ -84,14 +90,25 @@ class plgVmPaymentAmwalPay extends vmPSPlugin
 		$currentDate = new DateTime();
 		$datetime = $currentDate->format('YmdHis');
 		$refNumber = $_VMOrderID . "_" . $currentDate->format('ymds');
+		$payment_view = $selectedMethod->payment_view;
+		$contact_info_type = $selectedMethod->contact_info_type;
+		$ignoreReceipt = $selectedMethod->ignore_receipt == '1' ? true : false;
+		$checkout_color = $selectedMethod->checkout_color ?? '#7f22ff';
 
+		$sessionToken = AmwalPay::getUserTokens($user, $this->file, $selectedMethod);
 		// if $locale content en make $locale = "en"
 		if (strpos($locale, 'en') !== false) {
 			$locale = "en";
 		} else {
 			$locale = "ar";
 		}
-
+		$base_url = JURI::root();
+		$call_back = urldecode($base_url . 'index.php?option=com_virtuemart&view=pluginresponse&task=pluginresponsereceived');
+		$cancel_url = urldecode($base_url . 'index.php/cart/checkout');
+		$urls = in_array($payment_view, [1, 2])
+			? ['', '']
+			: [$call_back, $cancel_url];
+		list($returnUrl, $cancelUrl) = $urls;
 		// Generate secure hash
 		$secret_key = AmwalPay::generateString(
 			$amount,
@@ -101,7 +118,8 @@ class plgVmPaymentAmwalPay extends vmPSPlugin
 			,
 			$selectedMethod->terminal_id,
 			$selectedMethod->secret_key,
-			$datetime
+			$datetime,
+			$sessionToken
 		);
 
 		$data = (object) [
@@ -113,21 +131,26 @@ class plgVmPaymentAmwalPay extends vmPSPlugin
 			'LanguageId' => $locale,
 			'SecureHash' => $secret_key,
 			'TrxDateTime' => $datetime,
-			'PaymentViewType' => 1,
 			'RequestSource' => 'Checkout_Joomla',
-			'SessionToken' => '',
+			'SessionToken' => $sessionToken,
+			'ReturnUrl' => $returnUrl,
+			'CancelUrl' => $cancelUrl,
+			'PaymentViewType' => in_array($payment_view, [1, 2]) ? $payment_view : 1,
+			'CheckoutSiteMode' => ($payment_view === '3') ? 'offsite' : 'onsite',
+			'ContactInfoType' => $contact_info_type,
+			'IgnoreReceipt' => $ignoreReceipt,
+			'PrimaryColor' => $checkout_color
 		];
 		AmwalPay::addLogs($selectedMethod->debug, $this->file, 'Payment Request: ', print_r($data, 1));
+		$apiUrl = AmwalPay::getApiUrl($selectedMethod->live);
 		$doc = JFactory::getDocument();
-		$doc->addScript($this->amwal_scripts($selectedMethod->live));
+		$doc->addScript($apiUrl['smartbox']);
 
 		$jsData = json_encode($data); // Already an object; this just ensures proper format
-		$base_url = JURI::root();
-		$callback = $base_url . 'index.php?option=com_virtuemart&view=pluginresponse&task=pluginresponsereceived';
 		$inlineScript = "
 			 window.SmartBoxData = $jsData;
-			 window.BaseUrl = '$base_url';
-			 window.CallBack = '$callback';
+			 window.CancelUrl = '$cancel_url';
+			 window.CallBack = '$call_back';
 		 ";
 
 		$doc->addScriptDeclaration($inlineScript);
@@ -142,24 +165,18 @@ class plgVmPaymentAmwalPay extends vmPSPlugin
 		$db->setQuery($query);
 		$db->execute();
 	}
-	public function amwal_scripts($live)
+	public function plgVmOnPaymentResponseReceived(&$html)
 	{
-
-		if ($live == "prod") {
-			$liveurl = "https://checkout.amwalpg.com/js/SmartBox.js?v=1.1";
-		} else if ($live == "uat") {
-			$liveurl =
-				"https://test.amwalpg.com:7443/js/SmartBox.js?v=1.1";
-		} else if ($live == "sit") {
-			$liveurl =
-				"https://test.amwalpg.com:19443/js/SmartBox.js?v=1.1";
-
+		if (AmwalPay::sanitizeVar('REQUEST_METHOD', 'SERVER') === 'POST') {
+			$this->callCloudNotification();
+		} else if (AmwalPay::sanitizeVar('REQUEST_METHOD', 'SERVER') === 'GET') {
+			$this->callBack($html);
 		}
-		return $liveurl;
+
 	}
-	function plgVmOnPaymentResponseReceived(&$html)
+	public function callBack(&$html)
 	{
-		$orderId = substr(AmwalPay::sanitizeVar('merchantReference'), 0, -9);
+		list($orderId, ) = explode('_', AmwalPay::sanitizeVar('merchantReference'));
 
 		if (empty($orderId) || is_null($orderId) || $orderId === false || $orderId === "") {
 			throw new Exception('Ops, you are accessing wrong data');
@@ -178,7 +195,7 @@ class plgVmPaymentAmwalPay extends vmPSPlugin
 
 		$payment_name = $this->renderPluginName($method);
 		$html = $this->_getPaymentResponseHtml($order['details']['BT']->order_number, $payment_name);
-		$isPaymentApproved = false;
+		$link = JRoute::_("index.php?option=com_virtuemart&view=orders&layout=details&order_number=" . $order['details']['BT']->order_number . "&order_pass=" . $order['details']['BT']->order_pass, false);
 
 		$integrityParameters = [
 			"amount" => AmwalPay::sanitizeVar('amount'),
@@ -197,14 +214,16 @@ class plgVmPaymentAmwalPay extends vmPSPlugin
 		$integrityParameters['secureHashValue'] = $secureHashValue;
 		$integrityParameters['secureHashValueOld'] = AmwalPay::sanitizeVar('secureHashValue');
 
-		if (AmwalPay::sanitizeVar('responseCode') === '00' || $secureHashValue == AmwalPay::sanitizeVar('secureHashValue')) {
-			$isPaymentApproved = true;
-		}
-
 		$info = 'Old Hash -- ' . AmwalPay::sanitizeVar('secureHashValue') . '  New Hash -- ' . $secureHashValue . "</br>";
-		AmwalPay::addLogs($method->debug, $this->file, $info . ' Payment', $isPaymentApproved ? 'Approved' : 'Canceled');
-
-		if ($isPaymentApproved) {
+		AmwalPay::addLogs($method->debug, $this->file, $info);
+		if ($secureHashValue != AmwalPay::sanitizeVar('secureHashValue')) {
+			AmwalPay::addLogs($method->debug, $this->file, 'Invalid Hash');
+			$html .= "<br /><b style='color: red'>Ops, you are accessing wrong data</b>";
+			$html .= '<br /><br /><a class="vm-button-correct" href="' . $link . '">' . vmText::_('COM_VIRTUEMART_ORDER_VIEW_ORDER') . '</a>';
+			return false;
+		}
+		$this->saveCardToken(AmwalPay::sanitizeVar('customerId'), $method);
+		if (AmwalPay::sanitizeVar('responseCode') === '00') {
 			$note = 'AmwalPay : Payment Approved';
 			$msg = 'In callback action, for order #' . $orderId . ' ' . $note;
 			$order_history['order_status'] = 'C';
@@ -224,13 +243,192 @@ class plgVmPaymentAmwalPay extends vmPSPlugin
 			$order_history['comments'] = $note;
 			$orderModel->updateStatusForOneOrder($orderId, $order_history, true);
 			AmwalPay::addLogs($method->debug, $this->file, $msg);
-			$link = JRoute::_("index.php?option=com_virtuemart&view=orders&layout=details&order_number=" . $order['details']['BT']->order_number . "&order_pass=" . $order['details']['BT']->order_pass, false);
+
 			$html .= "<br /><b style='color: red'>$note.</b>";
 			$html .= '<br /><br /><a class="vm-button-correct" href="' . $link . '">' . vmText::_('COM_VIRTUEMART_ORDER_VIEW_ORDER') . '</a>';
 			return false;
 		}
 	}
-	function _getPaymentResponseHtml($order_number, $payment_name)
+	public function callCloudNotification()
+	{
+		$post_data = file_get_contents('php://input');
+		$json_data = json_decode($post_data, true);
+
+		list($orderId, ) = explode('_', $json_data['MerchantReference']);
+		if (empty($orderId) || is_null($orderId) || $orderId === false || $orderId === "") {
+			die(json_encode(['message' => 'Ops, you are accessing wrong data'], 400));
+		}
+
+		$orderModel = VmModel::getModel('orders');
+		$order = $orderModel->getOrder($orderId);
+
+		if (!($method = $this->getVmPluginMethod($order['details']['BT']->virtuemart_paymentmethod_id))) {
+			return NULL;
+		}
+
+		if ($method->payment_element != 'amwalpay') {
+			die(json_encode(['message' => 'Ops, you are accessing wrong data'], 400));
+		}
+
+		AmwalPay::addLogs(
+			$method->debug,
+			$this->file,
+			'In Cloud Notification Response: ',
+			print_r($json_data, 1)
+		);
+
+		// Validate payload
+		if (empty($json_data)) {
+			AmwalPay::addLogs($method->debug, $this->file, 'Empty JSON data');
+			die(json_encode(['message' => 'Invalid payload'], 400));
+		}
+
+		// Validate Merchant & Terminal IDs
+		if ($json_data['MerchantId'] != $method->merchant_id || $json_data['TerminalId'] != $method->terminal_id) {
+			AmwalPay::addLogs($method->debug, $this->file, 'Merchant/Terminal mismatch');
+			die(json_encode(['message' => 'Configuration mismatch'], 403));
+		}
+
+		$integrityParameters = [
+			"Amount" => $json_data['Amount'],
+			"AuthorizationDateTime" => $json_data['AuthorizationDateTime'],
+			"CurrencyId" => $json_data['CurrencyId'],
+			"DateTimeLocalTrxn" => $json_data['DateTimeLocalTrxn'],
+			"MerchantId" => $method->merchant_id,
+			"MerchantReference" => $json_data['MerchantReference'],
+			"Message" => $json_data['Message'],
+			"PaidThrough" => $json_data['PaidThrough'],
+			"ResponseCode" => $json_data['ResponseCode'],
+			"SystemReference" => $json_data['SystemReference'],
+			"TerminalId" => $method->terminal_id,
+			"TxnType" => $json_data['TxnType'],
+		];
+
+		$secureHashValue = AmwalPay::generateStringForFilter($integrityParameters, $method->secret_key);
+		$integrityParameters['secureHashValue'] = $secureHashValue;
+		$integrityParameters['secureHashValueOld'] = $json_data['SecureHash'];
+
+		AmwalPay::addLogs($method->debug, $this->file, 'Calculated Hash: ', print_r($integrityParameters, 1));
+		if ($secureHashValue != $json_data['SecureHash']) {
+			AmwalPay::addLogs($method->debug, $this->file, 'Invalid Hash');
+			die(json_encode([
+				'order_id' => $orderId,
+				'message' => 'Invalid Hash',
+			]));
+		}
+		$msg = 'Order #' . $orderId;
+		if ($json_data['ResponseCode'] === '00') {
+			// Success
+			$note = 'AmwalPay Webhook: Payment Approved';
+			$msg = $msg . ' ' . $note;
+			$order_history['order_status'] = 'C';
+			$order_history['comments'] = $note;
+			$orderModel->updateStatusForOneOrder($orderId, $order_history, true);
+			AmwalPay::addLogs($method->debug, $this->file, "Order #$orderId marked as paid");
+		} else {
+			// Failed
+			$note = 'AmwalPay Webhook: Payment Failed';
+			$msg = $msg . ' ' . $note;
+			$order_history['order_status'] = 'X';
+			$order_history['comments'] = $note;
+			$orderModel->updateStatusForOneOrder($orderId, $order_history, true);
+			AmwalPay::addLogs($method->debug, $this->file, "Order #$orderId marked as failed");
+		}
+		die(json_encode([
+			'order_id' => $orderId,
+			'message' => 'Order updated successfully',
+			'data' => $json_data['SystemReference'],
+		]));
+	}
+	public function saveCardToken($customerTokenId, $settings)
+	{
+		// Get the currently logged-in Joomla user
+		$user = JFactory::getUser();
+
+		// Customer must be logged in
+		if ($user->guest || empty($customerTokenId) || $customerTokenId === 'null') {
+			return false;
+		}
+
+		$userId = (int) $user->id;
+		$userEmail = $user->email;
+
+		// Get plugin configuration
+		$merchantId = $settings->merchant_id;
+		$environment = $settings->live;
+
+
+		AmwalPay::addLogs(
+			$settings->debug,
+			$this->file,
+			'Customer save Card Token for user -- ' . $userEmail,
+			$customerTokenId
+		);
+
+
+		$db = JFactory::getDbo();
+		$table = '#__amwalpay_cards_token';
+
+		// Check whether the user already has a token
+		$query = $db->getQuery(true)
+			->select('*')
+			->from($db->quoteName($table))
+			->where($db->quoteName('user_id') . ' = ' . $userId)
+			->where($db->quoteName('merchant_id') . ' = ' . $db->quote($merchantId))
+			->where($db->quoteName('environment') . ' = ' . $db->quote($environment));
+
+		$db->setQuery($query);
+		$existing = $db->loadObject();
+
+		if (!$existing) {
+			// Insert new token
+			$columns = array(
+				'user_id',
+				'token',
+				'merchant_id',
+				'environment'
+			);
+
+			$values = array(
+				$userId,
+				$db->quote($customerTokenId),
+				$db->quote($merchantId),
+				$db->quote($environment)
+			);
+
+			$query = $db->getQuery(true)
+				->insert($db->quoteName($table))
+				->columns($db->quoteName($columns))
+				->values(implode(',', $values));
+
+			$db->setQuery($query);
+
+			if (!$db->execute()) {
+				return false;
+			}
+		} else {
+			// Update existing token
+			$fields = array(
+				$db->quoteName('token') . ' = ' . $db->quote($customerTokenId)
+			);
+
+			$query = $db->getQuery(true)
+				->update($db->quoteName($table))
+				->set($fields)
+				->where($db->quoteName('user_id') . ' = ' . $userId)
+				->where($db->quoteName('merchant_id') . ' = ' . $db->quote($merchantId))
+				->where($db->quoteName('environment') . ' = ' . $db->quote($environment));
+
+			$db->setQuery($query);
+
+			if (!$db->execute()) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+	public function _getPaymentResponseHtml($order_number, $payment_name)
 	{
 		VmConfig::loadJLang('com_virtuemart');
 		$html = '<table>' . "\n";

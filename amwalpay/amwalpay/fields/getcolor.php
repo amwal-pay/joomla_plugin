@@ -18,10 +18,13 @@
  *
  * http://virtuemart.net
  */
+
+
+
 defined('JPATH_BASE') or die();
 
 jimport('joomla.form.formfield');
-class JFormFieldGetlogpath extends JFormField
+class JFormFieldGetcolor extends JFormField
 {
 
 	/**
@@ -30,12 +33,19 @@ class JFormFieldGetlogpath extends JFormField
 	 * @access    protected
 	 * @var        string
 	 */
-	var $type = 'getlogpath';
+	var $type = 'getcolor';
 	protected function getInput()
 	{
+        $value = $this->value ?: '#7f22ff';
 		JHtml::_('behavior.colorpicker');
 		$html = '
-        <p>Log file will be saved in joomla_directory/administrator/logs/</p>';
+        <input
+            type="color"
+            name="' . htmlspecialchars($this->name, ENT_QUOTES, 'UTF-8') . '"
+            id="' . htmlspecialchars($this->id, ENT_QUOTES, 'UTF-8') . '"
+            value="' . htmlspecialchars($value, ENT_QUOTES, 'UTF-8') . '"
+            style="width: 100px; height: 30px;"
+        />';
 		;
 		return $html;
 	}
